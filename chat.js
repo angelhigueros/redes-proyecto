@@ -1,60 +1,48 @@
+export const menu_chat = xmpp => {
+  console.log('\n:: CHAT REDES ::\n')
 
-export const menu_chat = (rl) => {
-    console.log("\n:: CHAT REDES ::\n")
-    // console.log("[1] Chat")
-    // console.log("[3] Salir (cerrar sesion)")
+  xmpp.on('online', async address => {
+    // Online.
+    const presence = xml('presence', { type: 'available' })
+    xmpp.send(presence)
 
-    // rl.question('-> Seleccione una opcion', (input) => {
+    console.log('Inició sesión con este address: ', address)
+  })
 
-    //     switch (input) {
-    //         case "1":
-    //             chat()
-    //             break
-    //         case "2":
-    //             console.log("[OK] Saliendo del programa\n")
-    //             break
-    //         default:
-    //             console.log("[!] Opcion no valida\n")
-    //             main()
-    //             break
-    //     }
+  // console.log("[1] Chat")
+  // console.log("[3] Salir (cerrar sesion)")
 
-    //     rl.close();
-    // })
+  // rl.question('-> Seleccione una opcion', (input) => {
+
+  //     switch (input) {
+  //         case "1":
+  //             chat()
+  //             break
+  //         case "2":
+  //             console.log("[OK] Saliendo del programa\n")
+  //             break
+  //         default:
+  //             console.log("[!] Opcion no valida\n")
+  //             main()
+  //             break
+  //     }
+
+  //     rl.close();
+  // })
 }
 
+export const show_all_users = () => {}
 
-export const show_all_users = () => {
+export const add_user_list = () => {}
 
-}
+export const show_user_details = () => {}
 
-export const add_user_list = () => {
+export const start_one_one = () => {}
 
-}
+export const join_group = () => {}
 
-export const show_user_details = () => {
+export const set_main_message = () => {}
 
-}
+export const sent_notification = () => {}
 
-export const start_one_one = () => {
-
-}
-
-
-export const join_group = () => {
-
-}
-
-export const set_main_message = () => {
-
-}
-
-
-export const sent_notification = () => {
-
-}
-
-
-export const sent_files = () => {
-
-}
+export const sent_files = () => {}
