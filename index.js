@@ -1,214 +1,400 @@
-// Proyecto Redes 1
-// Angel Higueros - 20460
-
-// LIBS
 import readline from 'readline'
 import net from 'net'
-import { client, xml, jid } from '@xmpp/client'
-import debug from '@xmpp/debug'
+import { client, xml } from '@xmpp/client'
 
-// UTILS
-const SERVER = 'alumchat.xyz'
-const PORT = '5222'
-const conn = new net.Socket()
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-})
+class Chat {
+  constructor() {
+    // UTILS
+    this.xmppClient = null
+    this.SERVER = 'alumchat.xyz'
+    this.PORT = 5222
+    this.conn = new net.Socket()
+    this.rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    })
 
-const main = () => {
-  // Connect with the XMPP server
-  conn.connect(5222, SERVER, () => {
-    conn.write(
-      `<stream:stream to='${SERVER}' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>`,
-    )
-  })
+    // Notifications
+    this.subscription = []
+    this.groupChatInvites = []
+  }
 
-  // let state = true
-  // while (state) {
-  console.log('[1] Login')
-  console.log('[2] Sign up')
-  console.log('[3] Exit')
+  // HELPERS
+  askQuestion = question => {
+    return new Promise(resolve => {
+      this.rl.question(question, answer => {
+        resolve(answer)
+      })
+    })
+  }
 
-  rl.question('-> select one option: ', input => {
-    if (input == '1') {
-      login()
-    } else if (input == '2') {
-      add_user()
-    } else if (input == '3') {
-      console.log('[OK] Saliendo del programa\n')
-      conn.on('close', () => {
+  startConnection = () => {
+    this.conn.connect(this.PORT, this.SERVER, () => {
+      this.conn.write(
+        `<stream:stream to='${this.SERVER}' xmlns='jabber:client' xmlns:stream='http://etherx.jabber.org/streams' version='1.0'>`,
+      )
+    })
+  }
+
+  displayMainMenu = async () => {
+    console.log('\n:: Main Menu ::\n')
+    console.log('[1] Login')
+    console.log('[2] Sign up')
+    console.log('[3] Exit')
+
+    const input = await this.askQuestion('-> Select an option: ')
+
+    if (input === '1') {
+      this.login()
+    } else if (input === '2') {
+      this.signup()
+    } else if (input === '3') {
+      console.log('[OK] Exiting the program\n')
+      this.conn.on('close', () => {
         console.log('[!] Connection closed')
       })
-      // state = false
     } else {
-      console.log('[!] Opcion no valida\n')
-      main()
+      console.log('[!] Invalid option\n')
+      this.displayMainMenu()
     }
-  })
-}
+  }
 
-// ADMIN FUNCTIONS
-
-// this func encapsulates the logic of login (not request the info)
-const request_access = (username, password) => {
-  const xmpp = client({
-    service: `xmpp://${SERVER}:${PORT}`,
-    domain: SERVER,
-    username: username,
-    password: password,
-    terminal: true,
-    tls: {
-      rejectUnauthorized: false,
-    },
-  })
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-
-  // debug(xmpp, true)
-
-  xmpp.on('error', err => {
-    console.error(
-      `\n[ERR] Your username or password is incorrect, please try it again`,
-    )
-    console.error(`[ERR] ${err}\n`)
-    // TODO: Arreglar el error "SASLError: not-authorized" que da cuando se ingresan datos incorrectos
-    main()
-  })
-
-  menu_chat(xmpp)
-}
-
-const login = () => {
-  console.log('\n:: SIGN UP ::\n')
-  rl.question('-> Username: ', user => {
-    rl.question('-> Password: ', password => {
-      request_access(user, password)
-
-      // TODO: A veces se tarda en hacer login y se optione "TimeoutError", no afecta pero ver si se logra eliminar esta alerta
+  requestAccess = async (username, password) => {
+    // Setting up XMPP client
+    this.xmppClient = client({
+      service: `xmpp://${this.SERVER}:${this.PORT}`,
+      domain: this.SERVER,
+      username: username,
+      password: password,
+      terminal: true,
+      tls: {
+        rejectUnauthorized: false,
+      },
     })
-  })
-}
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
-const add_user = () => {
-  // let status = false
+    this.xmppClient.on('error', err => {
+      if (err.condition === 'not-authorized') {
+        console.error('[ERR] Error while logging in')
+      }
+    })
 
-  console.log('\n:: SIGN UP ::\n')
-  rl.question('-> Username: ', user => {
-    rl.question('-> Password: ', password => {
-      conn.on('data', data => {
-        if (data.toString().includes('<stream:features>')) {
-          const newUserXML = `
-            <iq type="set" id="reg_1" mechanism='PLAIN'>
-              <query xmlns="jabber:iq:register">
-                <username>${user}</username>
-                <password>${password}</password>
-              </query>
-            </iq>
-            `
-          conn.write(newUserXML)
-        } else if (data.toString().includes('<iq type="result"')) {
-          console.log('\n[OK] USER REGISTER SUCCESFULLY')
-          request_access(user, password)
-        } else if (data.toString().includes('<iq type="error"')) {
-          console.log('[!] Error while creating new user, plase try it again')
-          // rl.close()
-          // TODO: se queda en bucle, la idea es que vuelva al menu principal
+    await this.xmppClient.start().catch(err => {
+      if (err.condition === 'not-authorized') {
+        console.error(
+          '[ERR] This user may not exist on the server. Please try again.',
+        )
+        this.displayMainMenu()
+      }
+    })
+
+    this.menuChat()
+  }
+
+  // ADMIN FUNCTIONS
+  login = async () => {
+    console.log('\n[OK] LOGIN\n')
+    const user = await this.askQuestion('-> Username: ')
+    const password = await this.askQuestion('-> Password: ')
+
+    this.requestAccess(user, password)
+  }
+
+  signup = async () => {
+    console.log('\n[OK] SIGN UP\n')
+    const user = await this.askQuestion('-> Username: ')
+    const password = await this.askQuestion('-> Password: ')
+
+    this.conn.on('data', data => {
+      if (data.toString().includes('<stream:features>')) {
+        const newUserXML = `
+              <iq type="set" id="reg_1" mechanism='PLAIN'>
+                <query xmlns="jabber:iq:register">
+                  <username>${user}</username>
+                  <password>${password}</password>
+                </query>
+              </iq>
+              `
+        this.conn.write(newUserXML)
+      } else if (data.toString().includes('<iq type="result"')) {
+        console.log('\n[OK] USER REGISTERED SUCCESSFULLY')
+        this.requestAccess(user, password)
+      } else if (data.toString().includes('<iq type="error"')) {
+        console.log('[ERR] Error while creating a new user, please try again')
+        // TODO: Looping issue, should return to the main menu
+      }
+    })
+  }
+
+  logout = () => {
+    // Implement the logic for logging out
+  }
+
+  removeUser = () => {
+    // Implement the logic for removing a user
+  }
+
+  menuChat = async () => {
+    // Get the last updates
+    this.getNotification()
+
+    console.log('\n:: PROYECTO REDES ::\n')
+    console.log('[1] Chat')
+    console.log('[2] Exit (Log out)')
+
+    const input = await this.askQuestion('-> Select an option: ')
+
+    if (input === '1') {
+      console.log('\n:: CHAT ::\n')
+      console.log('[1] Show all users/contacts and their status')
+      console.log('[2] Add a user to contacts')
+      console.log('[3] Show contact details')
+      console.log('[4] One-on-one communication')
+      console.log('[5] Join group conversations')
+      console.log('[6] Set main status message')
+      console.log('[7] Send/receive notifications')
+      console.log('[8] Send/receive files')
+      console.log('[9] Back')
+
+      const input2 = await this.askQuestion('-> Select an option: ')
+
+      if (input2 === '1') {
+        this.showAllUsers()
+      } else if (input2 === '2') {
+        this.addUserToContacts()
+      } else if (input2 === '3') {
+        this.showContactDetails()
+      } else if (input2 === '4') {
+        this.startOneToOne()
+      } else if (input2 === '5') {
+        this.joinGroup()
+      } else if (input2 === '6') {
+        this.setMainMessage()
+      } else if (input2 === '7') {
+        this.sendNotification()
+      } else if (input2 === '8') {
+        this.sendFiles()
+      } else if (input2 === '9') {
+        console.log('[OK] Going back\n')
+        this.menuChat()
+      } else {
+        console.log('[!] Invalid option\n')
+        this.menuChat()
+      }
+    } else if (input === '2') {
+      console.log('[OK] Exiting the program\n')
+      this.logout()
+    } else {
+      console.log('[!] Invalid option\n')
+      this.menuChat()
+    }
+  }
+
+  // CHAT FUNCTIONS
+  showAllUsers = async () => {
+    console.log('\n:: USERS ::\n')
+
+    try {
+      const rosterRequest = xml(
+        'iq',
+        { type: 'get', id: 'roster' },
+        xml('query', { xmlns: 'jabber:iq:roster' }),
+      )
+
+      await this.xmppClient.send(rosterRequest)
+
+      this.xmppClient.on('stanza', stanza => {
+        if (stanza.is('iq') && stanza.attrs.type === 'result') {
+          const contacts = stanza
+            .getChild('query', 'jabber:iq:roster')
+            .getChildren('item')
+
+          console.log('[] Contacts\n')
+
+          contacts.forEach(contact => {
+            const jid = contact?.attrs?.jid
+            const name = contact?.attrs?.name
+            const subscription = contact?.attrs?.subscription
+
+            console.log('JID:', jid)
+            console.log('Name:', name || jid)
+            console.log('Subscription:', subscription)
+          })
         }
       })
-    })
-  })
-}
+    } catch (err) {
+      console.error(`[ERR] While getting contacts: ${err}`)
+    }
 
-const logout = () => {}
+    this.menuChat()
+  }
 
-const remove_user = () => {}
+  addUserToContacts = async () => {
+    console.log('\n:: ADD CONTACT ::\n')
 
-// CHAT FUNCTIONS
-const menu_chat = xmpp => {
-  xmpp.on('online', async address => {
-    // Change the status of the user on server
-    const presence = xml('presence', { type: 'available' })
-    xmpp.send(presence)
+    console.log('[1] New contact')
+    console.log('[2] contancts requests')
 
-    console.log('\n:: CHAT REDES ::\n')
+    try {
+      const answer = await this.askQuestion('-> Choose an option: ')
 
-    console.log('\n[>] Welcome: ', address?._local)
-    console.log('[>] Server: ', address?._domain)
+      if (answer === '1') {
+        console.log('\n:: NEW CONTACT ::')
+        const user = await this.askQuestion('-> User: ')
 
-    console.log('\n[1] Chat')
-    console.log('[2] Salir (cerrar sesion)')
-
-    rl.question('-> Seleccione una opcion: ', input => {
-      if (input == '1') {
-        // chat()
-        console.log('\n:: CHAT ::\n')
-
-        console.log('\n[1] Mostrar todos los usuarios/contactos y su estado')
-        console.log('[2] Agregar un usuario a los contactos')
-        console.log('[3] Mostrar detalles de contacto de un usuario')
-        console.log('[4] Comunicación 1 a 1 con cualquier usuario/contacto')
-        console.log('[5] Participar en conversaciones grupales')
-        console.log('[6] Definir mensaje de presencia')
-        console.log('[7] Enviar/recibir notificaciones')
-        console.log('[8] Enviar/recibir archivos')
-        console.log('[9] Volver')
-
-        rl.question('-> Seleccione una opcion: ', input2 => {
-          if (input2 == '1') {
-            show_all_users()
-          } else if (input2 == '2') {
-            add_user_list()
-          } else if (input2 == '3') {
-            show_user_details()
-          } else if (input2 == '4') {
-            start_one_one()
-          } else if (input2 == '5') {
-            join_group()
-          } else if (input2 == '6') {
-            set_main_message()
-          } else if (input2 == '7') {
-            sent_notification()
-          } else if (input2 == '8') {
-            sent_files()
-          } else if (input2 == '9') {
-            console.log('[OK] Saliendo \n')
-            menu_chat()
-          } else {
-            console.log('[!] Opcion no valida\n')
-
-            menu_chat()
-          }
+        const subscriptionPresence = xml('presence', {
+          type: 'subscribe',
+          to: `${user}@alumchat.xyz`,
         })
-      } else if (input == '2') {
-        console.log('[OK] Saliendo del programa\n')
-        main()
+
+        await this.xmppClient.send(subscriptionPresence)
+        console.log('[OK] Request sent')
+        this.menuChat()
+      } else if (answer === '2') {
+        console.log('\n:: CONTACTS REQUESTS ::')
+
+        this.subscription.length === 0
+          ? console.log('[...] No contact requests')
+          : this.subscription.forEach((request, index) => {
+              console.log(`[${index + 1}] ${request.split('@')[0]}`)
+            })
+
+        if (this.subscription.length > 0) {
+          const user = await this.askQuestion('-> write the name of the user: ')
+          // Peticion xml para agregar a un usuario a contactos
+          const subscriptionPresence = xml('presence', {
+            type: 'subscribed',
+            to: `${user}@${this.SERVER}`,
+          })
+
+          await this.xmpp.send(subscriptionPresence)
+          console.log('[OK] Request accepted')
+
+          // Remover solicitud de la lista
+          const indexToRemove = this.subscription.indexOf(user)
+          if (indexToRemove !== -1) {
+            this.subscription.splice(indexToRemove, 1)
+          }
+        }
+
+        this.menuChat()
       } else {
-        console.log('[!] Opcion no valida\n')
-        main()
+        console.log('[!] Invalid option')
+        this.menuChat()
       }
+    } catch (error) {
+      console.error(`[ERR] ${error}`)
+      this.menuChat()
+    }
+  }
 
-      rl.close()
+  showContactDetails = async () => {
+    try {
+      console.log('\n:: SHOW CONTACT INFORMATION ::')
+      const username = await this.askQuestion('-> username: ')
+
+      const requestUsername = `${username}@alumchat.xyz`
+      const presenceRequest = xml('presence', { to: username })
+      this.xmppClient.send(presenceRequest)
+
+      this.xmppClient.on('stanza', stanza => {
+        if (stanza.is('iq') && stanza.attrs.type === 'result') {
+          const query = stanza.getChild('query', 'jabber:iq:roster')
+          const users = query.getChildren('item')
+          const user = users.find(user => user.attrs.jid === requestUsername)
+
+          if (user) {
+            console.log(`[-] JID: ${user?.attrs?.jid || ''}`)
+            console.log(`[-]  Name: ${user?.attrs?.name || username}`)
+            console.log(`[-] Subscription: ${user?.attrs?.subscription || ''}`)
+          } else {
+            console.log('User not found')
+          }
+
+          this.menuChat()
+        }
+      })
+
+      // Send xml request to server to get user info
+      const rosterRequest = xml(
+        'iq',
+        { type: 'get', id: 'roster' },
+        xml('query', { xmlns: 'jabber:iq:roster' }),
+      )
+
+      await this.xmppClient.send(rosterRequest)
+    } catch (error) {
+      console.error('[ERR] showContactDetails:', error)
+    }
+  }
+
+  startOneToOne = async () => {
+    console.log('\n:: CONVERSATION ::\n')
+
+    const username = await this.askQuestion('-> sent message to (username): ')
+
+
+    console.log(`\n[OK]  chatting with ${username}\n`);
+
+    const message = await this.askQuestion('-> message: ')
+
+    // Sent xml with the message to the server
+    const request = xml(
+      'message',
+      { type: 'chat', to: `${username}:${this.SERVER}` },
+      xml('body', {}, message),
+    )
+    await this.xmppClient.send(request)
+  }
+
+  joinGroup = () => {
+    // Implement the logic for joining a group chat
+  }
+
+  setMainMessage = () => {
+    // Implement the logic for setting the main message
+  }
+
+  getNotification = () => {
+    // Implement the logic for sending notifications
+    // Handles the different notifications and messages
+    this.xmppClient.on('stanza', stanza => {
+      if (stanza.is('message') && stanza.attrs.type == 'chat') {
+        const from = stanza.attrs.from
+        const body = stanza.getChildText('body')
+        const message = { from, body }
+
+        if (body) {
+          console.log(`Received message from ${from.split('@')[0]}:`, body)
+        }
+      } else if (stanza.is('presence') && stanza.attrs.type === 'subscribe') {
+        const from = stanza.attrs.from
+        this.receivedSubscriptions.push(from)
+        console.log('Received subscription request from:', from.split('@')[0])
+        console.log('Request message:', stanza.getChildText('status'))
+      } else if (
+        stanza.is('message') &&
+        stanza.attrs.from.includes('@conference.alumchat.xyz')
+      ) {
+        const groupchat = stanza.attrs.from
+        const to = stanza.attrs.to
+
+        this.receivedGroupChatInvites.push(groupchat)
+
+        // Si el to no tiene una diagonal, entonces se imprime la invitación.
+        if (!to.includes('/')) {
+          console.log('Group chat invitation from: ', groupchat)
+        }
+      }
     })
-  })
+  }
 
-  xmpp.start().catch(console.error)
+  sendFiles = () => {
+    // Implement the logic for sending and receiving files
+  }
 }
-
-const show_all_users = () => {}
-
-const add_user_list = () => {}
-
-const show_user_details = () => {}
-
-const start_one_one = () => {}
-
-const join_group = () => {}
-
-const set_main_message = () => {}
-
-const sent_notification = () => {}
-
-const sent_files = () => {}
 
 // INIT
-main()
+const main = new Chat()
+main.startConnection()
+main.displayMainMenu()
