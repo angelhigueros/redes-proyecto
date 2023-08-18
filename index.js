@@ -171,7 +171,7 @@ class Chat {
       } else if (input2 === '6') {
         this.setMainMessage()
       } else if (input2 === '7') {
-        this.sendNotification()
+        this.getNotification()
       } else if (input2 === '8') {
         this.sendFiles()
       } else if (input2 === '9') {
@@ -222,6 +222,7 @@ class Chat {
           })
         }
       })
+      this.menuChat()
     } catch (err) {
       console.error(`[ERR] While getting contacts: ${err}`)
     }
@@ -333,18 +334,35 @@ class Chat {
 
     const username = await this.askQuestion('-> sent message to (username): ')
 
+    console.log(`\n[OK]  chatting with ${username}\n`)
 
-    console.log(`\n[OK]  chatting with ${username}\n`);
+    // monitor the server
+    this.xmppClient.on('stanza', async stanza => {
+      if (stanza.is('message') && stanza.attrs.type === 'chat') {
+        const from = stanza.attrs.from
+        const msg = stanza.getChildText('body')
 
+        console.log('Stanza: ', stanza)
+        console.log(`[${from}] ${msg}`)
+      }
+    })
+
+    // Handle chat
+    console.log('\n [] To go back write -> back')
     const message = await this.askQuestion('-> message: ')
 
-    // Sent xml with the message to the server
-    const request = xml(
-      'message',
-      { type: 'chat', to: `${username}:${this.SERVER}` },
-      xml('body', {}, message),
-    )
-    await this.xmppClient.send(request)
+    if (message == 'back') {
+      // Salir
+      this.menuChat()
+    } else {
+      // Send message
+      const request = xml(
+        'message',
+        { type: 'chat', to: username },
+        xml('body', {}, message),
+      )
+      await this.xmppClient.send(request)
+    }
   }
 
   joinGroup = () => {
@@ -369,7 +387,7 @@ class Chat {
         }
       } else if (stanza.is('presence') && stanza.attrs.type === 'subscribe') {
         const from = stanza.attrs.from
-        this.receivedSubscriptions.push(from)
+        this.subscription.push(from)
         console.log('Received subscription request from:', from.split('@')[0])
         console.log('Request message:', stanza.getChildText('status'))
       } else if (
