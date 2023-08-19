@@ -14,12 +14,17 @@ class Chat {
       output: process.stdout,
     })
 
-    // Notifications
+    // Helpers variables
     this.subscription = []
-    this.groupChatInvites = []
+    this.groups = []
   }
 
-  // HELPERS
+  // HELPERS FUNCTIONS
+  /**
+   * Function that allows asking a question to the user in the console.
+   * @param {string} question - The question to be displayed to the user.
+   * @returns {Promise<string>} A promise that resolves with the user's answer.
+   */
   askQuestion = question => {
     return new Promise(resolve => {
       this.rl.question(question, answer => {
@@ -28,6 +33,12 @@ class Chat {
     })
   }
 
+  /**
+   * Initiates a connection with a server using the specific protocol.
+   * @description This function establishes a connection with a server using the defined
+   *   port and server values. It then sends an initial message through the connection
+   *   to initiate the communication process.
+   */
   startConnection = () => {
     this.conn.connect(this.PORT, this.SERVER, () => {
       this.conn.write(
@@ -36,6 +47,12 @@ class Chat {
     })
   }
 
+  /**
+   * Displays the main menu options to the user and handles user input.
+   * @description This function presents the user with options in the main menu, prompts for user input,
+   *   and then proceeds based on the selected option. It provides options for login, sign up, and exiting
+   *   the program. Depending on the user's choice, appropriate actions are taken.
+   */
   displayMainMenu = async () => {
     console.log('\n:: Main Menu ::\n')
     console.log('[1] Login')
@@ -59,6 +76,15 @@ class Chat {
     }
   }
 
+  /**
+   * Requests access to the XMPP server using the provided username and password.
+   * @param {string} username - The username for logging in to the XMPP server.
+   * @param {string} password - The password for logging in to the XMPP server.
+   * @description This function sets up an XMPP client connection to the server with the given credentials.
+   *   It establishes a connection, handles errors, and starts the XMPP client. If the login is not successful,
+   *   appropriate error messages are displayed, and the main menu is displayed again for user interaction.
+   *   Upon successful login, the function proceeds to the "menuChat" phase for further interaction.
+   */
   requestAccess = async (username, password) => {
     // Setting up XMPP client
     this.xmppClient = client({
@@ -92,6 +118,12 @@ class Chat {
   }
 
   // ADMIN FUNCTIONS
+  /**
+   * Handles the user login process.
+   * @description This function guides the user through the login process by prompting for their
+   *   username and password. It then calls the "requestAccess" function with the provided credentials
+   *   to initiate the process of requesting access to the XMPP server.
+   */
   login = async () => {
     console.log('\n[OK] LOGIN\n')
     const user = await this.askQuestion('-> Username: ')
@@ -100,6 +132,13 @@ class Chat {
     this.requestAccess(user, password)
   }
 
+  /**
+   * Handles the user sign-up process.
+   * @description This function guides the user through the sign-up process by prompting for a new username
+   *   and password. It listens for data from the connection and based on the received data, it constructs
+   *   and sends XML messages for user registration. Upon successful registration, it displays a success message
+   *   and proceeds to the "requestAccess" phase. In case of errors, appropriate messages are displayed.
+   */
   signup = async () => {
     console.log('\n[OK] SIGN UP\n')
     const user = await this.askQuestion('-> Username: ')
@@ -108,13 +147,13 @@ class Chat {
     this.conn.on('data', data => {
       if (data.toString().includes('<stream:features>')) {
         const newUserXML = `
-              <iq type="set" id="reg_1" mechanism='PLAIN'>
-                <query xmlns="jabber:iq:register">
-                  <username>${user}</username>
-                  <password>${password}</password>
-                </query>
-              </iq>
-              `
+        <iq type="set" id="reg_1" mechanism='PLAIN'>
+          <query xmlns="jabber:iq:register">
+            <username>${user}</username>
+            <password>${password}</password>
+          </query>
+        </iq>
+      `
         this.conn.write(newUserXML)
       } else if (data.toString().includes('<iq type="result"')) {
         console.log('\n[OK] USER REGISTERED SUCCESSFULLY')
@@ -134,6 +173,14 @@ class Chat {
     // Implement the logic for removing a user
   }
 
+  /**
+   * Handles the user interaction in the chat menu.
+   * @description This function displays the chat menu options to the user, prompts for their input,
+   *   and takes appropriate actions based on the selected option. It provides options for various
+   *   chat-related actions, such as viewing users, adding users to contacts, communicating one-on-one,
+   *   and more. Depending on the user's choice, the function performs corresponding tasks or navigates
+   *   back to the main chat menu.
+   */
   menuChat = async () => {
     // Get the last updates
     this.getNotification()
@@ -167,13 +214,17 @@ class Chat {
       } else if (input2 === '4') {
         this.startOneToOne()
       } else if (input2 === '5') {
-        this.joinGroup()
+        // TODO: fix implementation
+        // this.joinGroup()
+        this.menuChat()
       } else if (input2 === '6') {
         this.setMainMessage()
       } else if (input2 === '7') {
         this.getNotification()
       } else if (input2 === '8') {
-        this.sendFiles()
+        // TODO: fix implementation
+        // this.sendFiles()
+        this.menuChat()
       } else if (input2 === '9') {
         console.log('[OK] Going back\n')
         this.menuChat()
@@ -191,6 +242,13 @@ class Chat {
   }
 
   // CHAT FUNCTIONS
+
+  /**
+   * Displays information about all users/contacts.
+   * @description This function sends a roster request to the XMPP server to retrieve information
+   *   about the user's contacts. It then processes the received data and displays the contacts' JIDs,
+   *   names, and subscription status. If an error occurs during the process, an error message is displayed.
+   */
   showAllUsers = async () => {
     console.log('\n:: USERS ::\n')
 
@@ -230,11 +288,18 @@ class Chat {
     this.menuChat()
   }
 
+  /**
+   * Handles the process of adding a contact to the user's contact list.
+   * @description This function guides the user through the process of adding a new contact
+   *   or handling contact requests. It prompts the user for their choice, sends subscription
+   *   requests to the server, and processes the user's inputs. Depending on the selected option,
+   *   it either sends a subscription request to add a new contact or accepts contact requests.
+   */
   addUserToContacts = async () => {
     console.log('\n:: ADD CONTACT ::\n')
 
     console.log('[1] New contact')
-    console.log('[2] contancts requests')
+    console.log('[2] Contacts requests')
 
     try {
       const answer = await this.askQuestion('-> Choose an option: ')
@@ -261,8 +326,8 @@ class Chat {
             })
 
         if (this.subscription.length > 0) {
-          const user = await this.askQuestion('-> write the name of the user: ')
-          // Peticion xml para agregar a un usuario a contactos
+          const user = await this.askQuestion('-> Write the name of the user: ')
+          // XML request to add a user to contacts
           const subscriptionPresence = xml('presence', {
             type: 'subscribed',
             to: `${user}@${this.SERVER}`,
@@ -271,7 +336,7 @@ class Chat {
           await this.xmpp.send(subscriptionPresence)
           console.log('[OK] Request accepted')
 
-          // Remover solicitud de la lista
+          // Remove request from the list
           const indexToRemove = this.subscription.indexOf(user)
           if (indexToRemove !== -1) {
             this.subscription.splice(indexToRemove, 1)
@@ -289,10 +354,16 @@ class Chat {
     }
   }
 
+  /**
+   * Displays information about a specific contact.
+   * @description This function prompts the user to provide a username and sends requests to the server
+   *   to retrieve contact information. It processes the received data and displays relevant contact details,
+   *   such as JID, name, and subscription status. If the contact is not found, a message is displayed.
+   */
   showContactDetails = async () => {
     try {
       console.log('\n:: SHOW CONTACT INFORMATION ::')
-      const username = await this.askQuestion('-> username: ')
+      const username = await this.askQuestion('-> Username: ')
 
       const requestUsername = `${username}@alumchat.xyz`
       const presenceRequest = xml('presence', { to: username })
@@ -306,7 +377,7 @@ class Chat {
 
           if (user) {
             console.log(`[-] JID: ${user?.attrs?.jid || ''}`)
-            console.log(`[-]  Name: ${user?.attrs?.name || username}`)
+            console.log(`[-] Name: ${user?.attrs?.name || username}`)
             console.log(`[-] Subscription: ${user?.attrs?.subscription || ''}`)
           } else {
             console.log('User not found')
@@ -316,7 +387,7 @@ class Chat {
         }
       })
 
-      // Send xml request to server to get user info
+      // Send XML request to server to get user info
       const rosterRequest = xml(
         'iq',
         { type: 'get', id: 'roster' },
@@ -329,14 +400,21 @@ class Chat {
     }
   }
 
+  /**
+   * Initiates a one-on-one conversation with another user.
+   * @description This function handles the process of initiating a one-on-one conversation
+   *   with another user. It prompts the user to provide the username of the recipient and then
+   *   sets up a monitoring mechanism to listen for incoming messages. The user can then send messages
+   *   or choose to go back to the chat menu.
+   */
   startOneToOne = async () => {
     console.log('\n:: CONVERSATION ::\n')
 
-    const username = await this.askQuestion('-> sent message to (username): ')
+    const username = await this.askQuestion('-> Send message to (username): ')
 
-    console.log(`\n[OK]  chatting with ${username}\n`)
+    console.log(`\n[OK] Chatting with ${username}\n`)
 
-    // monitor the server
+    // Monitor the server for incoming messages
     this.xmppClient.on('stanza', async stanza => {
       if (stanza.is('message') && stanza.attrs.type === 'chat') {
         const from = stanza.attrs.from
@@ -347,12 +425,12 @@ class Chat {
       }
     })
 
-    // Handle chat
-    console.log('\n [] To go back write -> back')
-    const message = await this.askQuestion('-> message: ')
+    // Handle chat interaction
+    console.log('\n [] To go back, write -> back')
+    const message = await this.askQuestion('-> Message: ')
 
-    if (message == 'back') {
-      // Salir
+    if (message === 'back') {
+      // Go back
       this.menuChat()
     } else {
       // Send message
@@ -372,37 +450,46 @@ class Chat {
   setMainMessage = () => {
     // Implement the logic for setting the main message
   }
-
+  /**
+   * Handles the reception of various types of notifications from the XMPP server.
+   * @description This function listens for incoming stanzas from the XMPP server and processes
+   *   them based on their type. It handles incoming chat messages, subscription requests, and
+   *   group chat invitations. For chat messages, it extracts the sender's information and displays
+   *   the received message. For subscription requests, it adds the sender to the subscription list
+   *   and displays the received request along with its message. For group chat invitations, it adds
+   *   the invitation to the list of received group chat invites and displays the invitation if the
+   *   'to' attribute does not contain a slash ('/').
+   */
   getNotification = () => {
-    // Implement the logic for sending notifications
-    // Handles the different notifications and messages
     this.xmppClient.on('stanza', stanza => {
-      if (stanza.is('message') && stanza.attrs.type == 'chat') {
+      if (stanza.is('message') && stanza.attrs.type === 'chat') {
         const from = stanza.attrs.from
         const body = stanza.getChildText('body')
         const message = { from, body }
 
         if (body) {
-          console.log(`Received message from ${from.split('@')[0]}:`, body)
+          console.log(`[NOTIFY] You have recevied this messages`)
+          console.log(`[${from.split('@')[0]}] ${body}`)
         }
       } else if (stanza.is('presence') && stanza.attrs.type === 'subscribe') {
         const from = stanza.attrs.from
         this.subscription.push(from)
-        console.log('Received subscription request from:', from.split('@')[0])
-        console.log('Request message:', stanza.getChildText('status'))
+        console.log(`[NOTIFY] You have recevied this requests`)
+        console.log(`[${from.split('@')[0]}] ${stanza.getChildText('status')}`)
       } else if (
         stanza.is('message') &&
         stanza.attrs.from.includes('@conference.alumchat.xyz')
       ) {
+        // See if the user is in groups and add those groups to a list
         const groupchat = stanza.attrs.from
         const to = stanza.attrs.to
 
-        this.receivedGroupChatInvites.push(groupchat)
-
-        // Si el to no tiene una diagonal, entonces se imprime la invitación.
         if (!to.includes('/')) {
-          console.log('Group chat invitation from: ', groupchat)
+          console.log(`[NOTIFY] You have been invited to these groups`)
+          console.log(`[-] ${groupchat}`)
         }
+
+        this.groups.push(groupchat)
       }
     })
   }
