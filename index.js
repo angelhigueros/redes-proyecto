@@ -449,9 +449,28 @@ class Chat {
     // Implement the logic for joining a group chat
   }
 
-  setMainMessage = () => {
-    // Implement the logic for setting the main message
+  /**
+   * Changes the main status message in the chat context.
+   * @description This function allows the user to update their main status and associated status message
+   *   in a chat environment. It prompts the user to input a new status and a new status message. The function
+   *   then sends a request to the XMPP server to update the user's presence with the provided status and message.
+   *   Once the update is successful, a confirmation message is displayed, and the chat menu is displayed to continue
+   *   the interaction.
+   */
+  setMainMessage = async () => {
+    console.log('\n:: SET MAIN STATUS MESSAGE ::\n')
+    const status = await this.askQuestion('-> new status: ')
+    const message = await this.askQuestion('-> new message: ')
+
+    // Sent request to the server
+    await this.xmpp.send(
+      xml('presence', {}, xml('show', {}, status), xml('status', {}, message)),
+    )
+
+    console.log('[OK] Main status message has been changed')
+    this.menuChat()
   }
+
   /**
    * Handles the reception of various types of notifications from the XMPP server.
    * @description This function listens for incoming stanzas from the XMPP server and processes
