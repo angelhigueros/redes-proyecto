@@ -165,8 +165,10 @@ class Chat {
     })
   }
 
-  logout = () => {
-    // Implement the logic for logging out
+  logout = async () => {
+    await this.xmppClient.send(xml('presence', { type: 'unavailable' }))
+    await this.xmppClient.stop()
+    this.menuChat()
   }
 
   removeUser = () => {
