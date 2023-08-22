@@ -47,6 +47,13 @@ class Chat {
     })
   }
 
+  toBase64 = path => {
+    const fs = require('fs')
+    const fileData = fs.readFileSync(path)
+    const base64Data = fileData.toString('base64')
+    return base64Data
+  }
+
   /**
    * Displays the main menu options to the user and handles user input.
    * @description This function presents the user with options in the main menu, prompts for user input,
@@ -126,7 +133,7 @@ class Chat {
    *   to initiate the process of requesting access to the XMPP server.
    */
   login = async () => {
-    console.log('\n[OK] LOGIN\n')
+    console.log('\n:: LOGIN ::\n')
     const user = await this.askQuestion('-> Username: ')
     const password = await this.askQuestion('-> Password: ')
 
@@ -188,7 +195,7 @@ class Chat {
       .catch(err => {
         console.error(`[ERR] ${err}`)
       })
-      this.displayMainMenu()
+    this.displayMainMenu()
   }
 
   /**
@@ -242,9 +249,7 @@ class Chat {
         this.getNotification()
         this.menuChat()
       } else if (input2 === '8') {
-        // TODO: fix implementation
-        // this.sendFiles()
-        this.menuChat()
+        this.sendFiles()
       } else if (input2 === '9') {
         this.removeUser()
       } else if (input2 === '10') {
@@ -535,8 +540,31 @@ class Chat {
     })
   }
 
-  sendFiles = () => {
-    // Implement the logic for sending and receiving files
+  sendFiles = async () => {
+    console.log(`\n::  SEND FILES::\n`)
+
+    try {
+      const user = await this.askQuestion('-> Username: ')
+      const file = await this.askQuestion('-> File path: ')
+
+      // Get file
+      const base64 = fileToBase64(file)
+      const fileName = filePath.split('/').pop()
+
+      // XML request to send a file
+      const request = xml(
+        'message',
+        { to: `${user}@${this.SERVER}`, type: 'chat' },
+        xml('body', {}, `file://${base64}`),
+        xml('subject', {}, `Archivo: ${fileName}`),
+
+        await this.xmppClient.send(request),
+        console.log('\n[OK] file has been sent'),
+      )
+    } catch (error) {
+      console.log(`\n[ERR] file cannot be sent: ${error}`)
+    }
+    this.menuChat()
   }
 }
 
