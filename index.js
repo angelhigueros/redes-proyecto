@@ -114,6 +114,7 @@ class Chat {
       }
     })
 
+    // TODO: cuando falla el login aun se dirije al menu
     this.menuChat()
   }
 
@@ -173,6 +174,21 @@ class Chat {
 
   removeUser = () => {
     // Implement the logic for removing a user
+    const request = xml(
+      'iq',
+      { type: 'set', id: 'unreg1' },
+      xml('query', { xmlns: 'jabber:iq:register' }, xml('remove', {})),
+    )
+    this.xmppClient
+      .send(request)
+      .then(() => {
+        console.log('[!] User has been deleted\n')
+        this.xmppClient.stop()
+      })
+      .catch(err => {
+        console.error(`[ERR] ${err}`)
+      })
+      this.displayMainMenu()
   }
 
   /**
@@ -203,7 +219,8 @@ class Chat {
       console.log('[6] Set main status message')
       console.log('[7] Send/receive notifications')
       console.log('[8] Send/receive files')
-      console.log('[9] Back')
+      console.log('[9] Delete user')
+      console.log('[10] Back')
 
       const input2 = await this.askQuestion('-> Select an option: ')
 
@@ -223,11 +240,14 @@ class Chat {
         this.setMainMessage()
       } else if (input2 === '7') {
         this.getNotification()
+        this.menuChat()
       } else if (input2 === '8') {
         // TODO: fix implementation
         // this.sendFiles()
         this.menuChat()
       } else if (input2 === '9') {
+        this.removeUser()
+      } else if (input2 === '10') {
         console.log('[OK] Going back\n')
         this.menuChat()
       } else {
@@ -463,7 +483,7 @@ class Chat {
     const message = await this.askQuestion('-> new message: ')
 
     // Sent request to the server
-    await this.xmpp.send(
+    await this.xmppClient.send(
       xml('presence', {}, xml('show', {}, status), xml('status', {}, message)),
     )
 
@@ -490,7 +510,7 @@ class Chat {
 
         if (body) {
           console.log(`[NOTIFY] You have recevied this messages`)
-          console.log(`[${from.split('@')[0]}] ${body}`)
+          console.log(`[${from.split('@')[0]}] ${body}\n`)
         }
       } else if (stanza.is('presence') && stanza.attrs.type === 'subscribe') {
         const from = stanza.attrs.from
