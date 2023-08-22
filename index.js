@@ -540,6 +540,14 @@ class Chat {
     })
   }
 
+  /**
+   * Sends files in the chat context.
+   * @description This function facilitates sending files in a chat environment. It prompts the user to provide
+   *   the recipient's username and the file path to the file they want to send. After encoding the file in base64,
+   *   it constructs an XML request to send the file. The function then attempts to send the file using the XMPP
+   *   client, and if successful, it displays a confirmation message. In case of any errors, an error message is shown.
+   *   Finally, the chat menu is displayed to continue the interaction.
+   */
   sendFiles = async () => {
     console.log(`\n::  SEND FILES::\n`)
 
@@ -547,23 +555,25 @@ class Chat {
       const user = await this.askQuestion('-> Username: ')
       const file = await this.askQuestion('-> File path: ')
 
-      // Get file
       const base64 = fileToBase64(file)
-      const fileName = filePath.split('/').pop()
+      const fileName = file.split('/').pop()
 
-      // XML request to send a file
+      // Construct an XML request to send the file.
       const request = xml(
         'message',
         { to: `${user}@${this.SERVER}`, type: 'chat' },
         xml('body', {}, `file://${base64}`),
         xml('subject', {}, `Archivo: ${fileName}`),
-
-        await this.xmppClient.send(request),
-        console.log('\n[OK] file has been sent'),
       )
+
+      // Send the XML request using the XMPP client.
+      await this.xmppClient.send(request)
+
+      console.log('\n[OK] File has been sent')
     } catch (error) {
-      console.log(`\n[ERR] file cannot be sent: ${error}`)
+      console.log(`\n[ERR] File cannot be sent: ${error}`)
     }
+
     this.menuChat()
   }
 }
